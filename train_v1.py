@@ -526,7 +526,8 @@ class Trainer:
                 
                 # Backward
                 self.accelerator.backward(loss)
-                
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)  # 
+
                 # Gradient clipping
                 if self.accelerator.sync_gradients:
                     self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
@@ -541,26 +542,7 @@ class Trainer:
                 epoch_kl += kl.item()
                 num_batches += 1
                 
-                if self.accelerator.sync_gradients:
-                    self.global_step += 1
                     
-                    # if self.global_step % self.cfg.LOG_INTERVAL == 0:
-                    #     if self.accelerator.is_main_process:
-                    #         self.accelerator.log({
-                    #             "train/loss": loss.item(),
-                    #             "train/mse": mse.item(),
-                    #             "train/kl": kl.item(),
-                    #             "train/mask_ratio": mask_ratio,
-                    #             "train/lr": self.lr_scheduler.get_last_lr()[0]
-                    #         }, step=self.global_step)
-                        
-                    #     progress_bar.set_postfix(
-                    #         loss=f"{loss.item():.4f}",
-                    #         mse=f"{mse.item():.4f}",
-                    #         kl=f"{kl.item():.4f}",
-                    #         mask=f"{mask_ratio:.2f}"
-                    #     )
-
                 if step == 0:
                     mem = torch.cuda.max_memory_allocated(self.device) / 2**30
                     self.logger.info(f"[epoch {epoch}] Peak GPU: {mem:.2f} GB")

@@ -171,6 +171,8 @@ class ASLAvatarModel(nn.Module):
         mu = self.to_mu(encoder_output[:, 0, :])       # (B, D_latent)
         logvar = self.to_logvar(encoder_output[:, 1, :])  # (B, D_latent)
         
+        logvar = torch.clamp(logvar, min=-20, max=20) # Prevent extreme values
+        
         return mu, logvar
 
     def decode(self, z, condition, seq_len, padding_mask=None):
@@ -291,3 +293,4 @@ class ASLAvatarModel(nn.Module):
         
         recon_motion = self.decode(z, condition, T, padding_mask)
         return recon_motion
+    

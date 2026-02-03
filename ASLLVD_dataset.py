@@ -365,7 +365,7 @@ class ASLLVDSkeletonDataset(Dataset):
     def __getitem__(self, idx):
         """
         Returns:
-            pose_tensor: (T, 390) - normalized pose sequence
+            pose_tensor: (T, 216) - normalized pose sequence
             label: str - gloss name
             length: int - actual sequence length (before padding)
         """
@@ -460,3 +460,100 @@ def create_padding_mask(lengths, max_len, device):
     indices = torch.arange(max_len, device=device).expand(B, -1)
     mask = indices >= lengths.unsqueeze(1)
     return mask
+
+
+
+if __name__ == "__main__":
+    # Example configuration
+    
+    class Config:
+        
+        def __init__(self):
+            # ==================== Dataset ====================
+            self.DATASET_NAME = "ASLLVD_Skeleton3D"
+            self.SKELETON_DIR ='/scratch/rhong5/dataset/ASLLVD/asl-skeleton3d/normalized/3d'
+            self.PHONO_DIR = '/scratch/rhong5/dataset/ASLLVD/asl-phono/phonology/3d'
+            
+            # Split files (auto-generated if not exist)
+            self.TRAIN_SPLIT_FILE = "/scratch/rhong5/dataset/ASLLVD/train_split.txt"
+            self.TEST_SPLIT_FILE = "/scratch/rhong5/dataset/ASLLVD/test_split.txt"
+            
+            # ==================== Data Dimensions ====================
+            # Upper Body(14) + Face(16) + HandL(21) + HandR(21) = 72 joints
+            # 72 * 3 (x,y,z) = 216
+            self.INPUT_DIM = 216
+            self.MAX_SEQ_LEN = 50
+            
+            # Sequence interpolation (original data has only 2-4 frames per sample)
+            self.MIN_SEQ_LEN = 5  # Minimum sequence length after interpolation
+            self.INTERPOLATE_SHORT_SEQ = True  # Whether to interpolate short sequences
+            
+            
+            # ==================== Model Architecture ====================
+            self.LATENT_DIM = 256
+            self.MODEL_DIM = 512
+            self.N_HEADS = 8
+            self.N_LAYERS = 4
+            self.DROPOUT = 0.1
+            
+            # ==================== Training ====================
+            self.TRAIN_BSZ = 200
+            self.EVAL_BSZ = 200
+
+            
+            
+            # Curriculum Learning
+            self.USE_CURRICULUM = True
+            self.MASK_RATIO_MAX = 0.6
+            
+            # ==================== Hardware ====================
+            self.MIXED_PRECISION = "fp16"
+            self.NUM_WORKERS = 4
+            
+
+
+
+    cfg = Config()
+
+    dataset = ASLLVDSkeletonDataset(mode='train', cfg=cfg)
+    print(f"Dataset size: {len(dataset)}")
+        
+    nan_files = []
+    inf_files = []
+    extreme_files = []
+
+    nan_txt = "nan_files.txt"
+    with open(nan_txt, 'w') as f_nan:
+        f_nan.write("Files with NaN values:\n")
+        for i, dta in enumerate(dataset):
+            pose_seq, label, length = dta
+            
+            # 检查 NaN
+            if torch.isnan(pose_seq).any():
+                nan_count = torch.isnan(pose_seq).sum().item()
+                nan_files.append((dataset.data_list[i], label, nan_count))
+                print(f"[{i}] NaN found: {dataset.data_list[i]}, count={nan_count}")
+                f_nan.write(f"{dataset.data_list[i]}, label={label}, NaN_count={nan_count}\n")
+                
+            
+            # 检查 Inf
+            if torch.isinf(pose_seq).any():
+                inf_count = torch.isinf(pose_seq).sum().item()
+                inf_files.append((dataset.data_list[i], label, inf_count))
+                print(f"[{i}] Inf found: {dataset.data_list[i]}, count={inf_count}")
+                f_nan.write(f"{dataset.data_list[i]}, label={label}, Inf_count={inf_count}\n")
+            
+            # 检查极端值 (|value| > 100)
+            max_val = pose_seq.abs().max().item()
+            if max_val > 100:
+                extreme_files.append((dataset.data_list[i], label, max_val))
+                print(f"[{i}] Extreme value: {dataset.data_list[i]}, max={max_val:.2f}")
+            
+            if (i + 1) % 1000 == 0:
+                print(f"Checked {i+1}/{len(dataset)} samples...")
+
+    print("\n" + "="*50)
+    print(f"Total samples: {len(dataset)}")
+    print(f"NaN files: {len(nan_files)}")
+    print(f"Inf files: {len(inf_files)}")
+    print(f"Extreme value files (>100): {len(extreme_files)}")
