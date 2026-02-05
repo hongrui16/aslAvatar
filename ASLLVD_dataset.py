@@ -362,7 +362,7 @@ class ASLLVDSkeletonDataset(Dataset):
     def __len__(self):
         return len(self.data_list)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, debug=False):
         """
         Returns:
             pose_tensor: (T, 216) - normalized pose sequence
@@ -394,6 +394,7 @@ class ASLLVDSkeletonDataset(Dataset):
             dummy_len = self.min_seq_len if self.interpolate else 1
             return torch.zeros(dummy_len, self.cfg.INPUT_DIM), label, dummy_len
         
+        num_frames = len(frames)
         # Sort by frame index
         frames = sorted(frames, key=lambda x: x.get('frame_index', 0))
         
@@ -417,6 +418,8 @@ class ASLLVDSkeletonDataset(Dataset):
             pose_tensor = pose_tensor[:self.cfg.MAX_SEQ_LEN]
         
         length = pose_tensor.shape[0]
+        if debug:
+            return pose_tensor, label, num_frames
         
         return pose_tensor, label, length
 
@@ -518,42 +521,65 @@ if __name__ == "__main__":
     dataset = ASLLVDSkeletonDataset(mode='train', cfg=cfg)
     print(f"Dataset size: {len(dataset)}")
         
-    nan_files = []
-    inf_files = []
-    extreme_files = []
+    # nan_files = []
+    # inf_files = []
+    # extreme_files = []
 
-    nan_txt = "nan_files.txt"
-    with open(nan_txt, 'w') as f_nan:
-        f_nan.write("Files with NaN values:\n")
-        for i, dta in enumerate(dataset):
-            pose_seq, label, length = dta
+    # nan_txt = "nan_files.txt"
+    # with open(nan_txt, 'w') as f_nan:
+    #     f_nan.write("Files with NaN values:\n")
+    #     for i, dta in enumerate(dataset):
+    #         pose_seq, label, length = dta
             
-            # 检查 NaN
-            if torch.isnan(pose_seq).any():
-                nan_count = torch.isnan(pose_seq).sum().item()
-                nan_files.append((dataset.data_list[i], label, nan_count))
-                print(f"[{i}] NaN found: {dataset.data_list[i]}, count={nan_count}")
-                f_nan.write(f"{dataset.data_list[i]}, label={label}, NaN_count={nan_count}\n")
+    #         # 检查 NaN
+    #         if torch.isnan(pose_seq).any():
+    #             nan_count = torch.isnan(pose_seq).sum().item()
+    #             nan_files.append((dataset.data_list[i], label, nan_count))
+    #             print(f"[{i}] NaN found: {dataset.data_list[i]}, count={nan_count}")
+    #             f_nan.write(f"{dataset.data_list[i]}, label={label}, NaN_count={nan_count}\n")
                 
             
-            # 检查 Inf
-            if torch.isinf(pose_seq).any():
-                inf_count = torch.isinf(pose_seq).sum().item()
-                inf_files.append((dataset.data_list[i], label, inf_count))
-                print(f"[{i}] Inf found: {dataset.data_list[i]}, count={inf_count}")
-                f_nan.write(f"{dataset.data_list[i]}, label={label}, Inf_count={inf_count}\n")
+    #         # 检查 Inf
+    #         if torch.isinf(pose_seq).any():
+    #             inf_count = torch.isinf(pose_seq).sum().item()
+    #             inf_files.append((dataset.data_list[i], label, inf_count))
+    #             print(f"[{i}] Inf found: {dataset.data_list[i]}, count={inf_count}")
+    #             f_nan.write(f"{dataset.data_list[i]}, label={label}, Inf_count={inf_count}\n")
             
-            # 检查极端值 (|value| > 100)
-            max_val = pose_seq.abs().max().item()
-            if max_val > 100:
-                extreme_files.append((dataset.data_list[i], label, max_val))
-                print(f"[{i}] Extreme value: {dataset.data_list[i]}, max={max_val:.2f}")
+    #         # 检查极端值 (|value| > 100)
+    #         max_val = pose_seq.abs().max().item()
+    #         if max_val > 100:
+    #             extreme_files.append((dataset.data_list[i], label, max_val))
+    #             print(f"[{i}] Extreme value: {dataset.data_list[i]}, max={max_val:.2f}")
             
-            if (i + 1) % 1000 == 0:
-                print(f"Checked {i+1}/{len(dataset)} samples...")
+    #         if (i + 1) % 1000 == 0:
+    #             print(f"Checked {i+1}/{len(dataset)} samples...")
 
-    print("\n" + "="*50)
-    print(f"Total samples: {len(dataset)}")
-    print(f"NaN files: {len(nan_files)}")
-    print(f"Inf files: {len(inf_files)}")
-    print(f"Extreme value files (>100): {len(extreme_files)}")
+    # print("\n" + "="*50)
+    # print(f"Total samples: {len(dataset)}")
+    # print(f"NaN files: {len(nan_files)}") # zero
+    # print(f"Inf files: {len(inf_files)}") # zero
+    # print(f"Extreme value files (>100): {len(extreme_files)}") # zero 
+
+
+    from collections import Counter
+    
+    frame_counts = []
+    for i in range(len(dataset)):
+        pose_seq, label, orig_frames = dataset.__getitem__(i, debug=True)
+        frame_counts.append(orig_frames)
+        
+        if (i + 1) % 1000 == 0:
+            print(f"Processed {i+1}/{len(dataset)}...")
+    
+    # 统计
+    counter = Counter(frame_counts)
+    total = len(frame_counts)
+    
+    print("\n帧数分布:")
+    print(f"{'帧数':<8} {'数量':<10} {'占比':<10} {'累计':<10}")
+    cumulative = 0
+    for n in sorted(counter.keys()):
+        pct = counter[n] / total * 100
+        cumulative += pct
+        print(f"{n:<8} {counter[n]:<10} {pct:>5.2f}%     {cumulative:>5.2f}%")
