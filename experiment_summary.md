@@ -88,35 +88,38 @@ self.optimizer.step()
 
 ### Keyframe Distribution Analysis
 
-
 Total gloss folders: 3,186
 
-| Frames | Count | Ratio | Frames | Count | Ratio | Frames | Count | Ratio |
-|--------|-------|-------|--------|-------|-------|--------|-------|-------|
-| 8      | 1     | 0.03% | 33     | 99    | 3.11% | 53     | 7     | 0.22% |
-| 13     | 2     | 0.06% | 34     | 79    | 2.48% | 54     | 7     | 0.22% |
-| 15     | 5     | 0.16% | 35     | 70    | 2.20% | 55     | 9     | 0.28% |
-| 16     | 15    | 0.47% | 36     | 76    | 2.39% | 56     | 7     | 0.22% |
-| 17     | 21    | 0.66% | 37     | 46    | 1.44% | 57     | 8     | 0.25% |
-| 18     | 50    | 1.57% | 38     | 46    | 1.44% | 58     | 3     | 0.09% |
-| 19     | 71    | 2.23% | 39     | 35    | 1.10% | 59     | 7     | 0.22% |
-| 20     | 100   | 3.14% | 40     | 30    | 0.94% | 60     | 4     | 0.13% |
-| 21     | 135   | 4.24% | 41     | 31    | 0.97% | 61     | 1     | 0.03% |
-| 22     | 156   | 4.90% | 42     | 27    | 0.85% | 62     | 3     | 0.09% |
-| 23     | 213   | 6.69% | 43     | 32    | 1.00% | 63     | 5     | 0.16% |
-| 24     | 183   | 5.74% | 44     | 18    | 0.57% | 64     | 2     | 0.06% |
-| 25     | 204   | 6.40% | 45     | 26    | 0.82% | 66     | 2     | 0.06% |
-| 26     | 192   | 6.03% | 46     | 23    | 0.72% | 67     | 1     | 0.03% |
-| 27     | 155   | 4.87% | 47     | 20    | 0.63% | 68     | 2     | 0.06% |
-| 28     | 181   | 5.68% | 48     | 16    | 0.50% | 70–77  | 6     | 0.19% |
-| 29     | 178   | 5.59% | 49     | 19    | 0.60% | 85     | 1     | 0.03% |
-| 30     | 199   | 6.25% | 50     | 12    | 0.38% | 116    | 1     | 0.03% |
-| 31     | 186   | 5.84% | 51     | 14    | 0.44% |        |       |       |
-| 32     | 130   | 4.08% | 52     | 14    | 0.44% |        |       |       |
-
-
+|Frames| Cnt | Ratio |     |Frames| Cnt | Ratio |     |Frames| Cnt | Ratio |     |Frames| Cnt | Ratio |
+|----|-----|-------|-----|----|-----|-------|-----|----|-----|-------|-----|----|-----|-------|
+| 8  | 1   | 0.03% |   | 28 | 181 | 5.68% |   | 43 | 32  | 1.00% |   | 58 | 3   | 0.09% |
+| 13 | 2   | 0.06% |   | 29 | 178 | 5.59% |   | 44 | 18  | 0.57% |   | 59 | 7   | 0.22% |
+| 15 | 5   | 0.16% |   | 30 | 199 | 6.25% |   | 45 | 26  | 0.82% |   | 60 | 4   | 0.13% |
+| 16 | 15  | 0.47% |   | 31 | 186 | 5.84% |   | 46 | 23  | 0.72% |   | 61 | 1   | 0.03% |
+| 17 | 21  | 0.66% |   | 32 | 130 | 4.08% |   | 47 | 20  | 0.63% |   | 62 | 3   | 0.09% |
+| 18 | 50  | 1.57% |   | 33 | 99  | 3.11% |   | 48 | 16  | 0.50% |   | 63 | 5   | 0.16% |
+| 19 | 71  | 2.23% |   | 34 | 79  | 2.48% |   | 49 | 19  | 0.60% |   | 64 | 2   | 0.06% |
+| 20 | 100 | 3.14% |   | 35 | 70  | 2.20% |   | 50 | 12  | 0.38% |   | 66 | 2   | 0.06% |
+| 21 | 135 | 4.24% |   | 36 | 76  | 2.39% |   | 51 | 14  | 0.44% |   | 67 | 1   | 0.03% |
+| 22 | 156 | 4.90% |   | 37 | 46  | 1.44% |   | 52 | 14  | 0.44% |   | 68 | 2   | 0.06% |
+| 23 | 213 | 6.69% |   | 38 | 46  | 1.44% |   | 53 | 7   | 0.22% |   | 70–77 | 6 | 0.19% |
+| 24 | 183 | 5.74% |   | 39 | 35  | 1.10% |   | 54 | 7   | 0.22% |   | 85 | 1   | 0.03% |
+| 25 | 204 | 6.40% |   | 40 | 30  | 0.94% |   | 55 | 9   | 0.28% |   | 116 | 1  | 0.03% |
+| 26 | 192 | 6.03% |   | 41 | 31  | 0.97% |   | 56 | 7   | 0.22% |   |    |     |       |
+| 27 | 155 | 4.87% |   | 42 | 27  | 0.85% |   | 57 | 8   | 0.25% |   |    |     |       |
 
 **Key Finding**: Distribution peaks at 23 frames (6.69%), with ~75% of glosses containing 20–32 keyframes. Median is approximately 27 frames, indicating substantially denser temporal sampling compared to the skeleton dataset.
+
+### Sampling Frame Selection
+
+| Target Frames | Coverage | Notes |
+|---------------|----------|-------|
+| 32            | ~75%     | Power of 2, video diffusion standard (SVD, AnimateDiff), compute-friendly. ~25% glosses truncated. |
+| 36            | ~85%     | Balanced trade-off between coverage and efficiency. |
+| 48            | ~95%     | Only long-tail glosses need truncation or padding. |
+| 64            | ~99%     | Short glosses require heavy padding, wastes compute. |
+
+For variable-length inputs, **uniform temporal sampling** to the target frame count (e.g., uniformly sample 32 frames from a 50-frame clip) preserves full motion trajectory better than hard truncation.
 
 ## Next Steps
 
@@ -126,14 +129,13 @@ Total gloss folders: 3,186
 - Complete videos (15-30 fps, 2-5 seconds per sign)
 - Standardized recording environment (frontal view, clean background)
 - Corresponding phonological annotations available
-- ~14,000+ signs
+- ~3,000+ signs
 
 **Proposed Pipeline**:
-
 ```
 ASL Signbank Videos
         ↓
-   SMPL-X Extraction (SMPLer-X / OSX)
+   SMPL-X Extraction (SMPLest-X)
         ↓
    Quality Filtering (confidence, occlusion)
         ↓
@@ -142,13 +144,10 @@ ASL Signbank Videos
    Training Data
 ```
 
-### Tool Options for SMPL-X Extraction
+### SMPL-X Extraction
 
-| Tool | Pros | Cons |
-|------|------|------|
-| SMPLer-X | Best quality, full body | Slower |
-| OSX | Fast | Slightly lower quality |
-| 4D-Humans | Good temporal consistency | May need adaptation |
+- **Tool**: [SMPLest-X](https://github.com/MotrixLab/SMPLest-X) — lightweight, efficient SMPL-X parameter extraction
+- **Output**: Full SMPL-X parameters (body pose, hand pose, facial expression) per frame
 
 ### Expected Outcome
 
@@ -158,10 +157,11 @@ ASL Signbank Videos
 - Combined with ASL-LEX phonological features for conditioning
 
 ---
+---
 
 ## References
 
 - ASL-Skeleton3D / ASL-Phono dataset
-- ASL Signbank: https://www.signbank.org/signpuddle/
+- ASL Signbank: https://aslsignbank.haskins.yale.edu/signs
 - ASL-LEX 2.0: Phonological database
 - SMPLer-X: https://github.com/caizhongang/SMPLer-X

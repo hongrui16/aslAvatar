@@ -285,15 +285,21 @@ class SignBankSMPLXDataset(Dataset):
         # Normalize
         pose_tensor = self._normalize_pose(pose_tensor)
 
-        if pose_tensor.shape[0] < self.target_seq_len:
+        if pose_tensor.shape[0] > self.target_seq_len:
+            # Keep first and last frame, uniformly sample middle frames
+            middle = pose_tensor[1:-1]  # (T-2, input_dim)
+            num_sample = self.target_seq_len - 2
+            indices = torch.linspace(0, middle.shape[0] - 1, num_sample).long()
+            pose_tensor = torch.cat([
+                pose_tensor[:1],       # first frame
+                middle[indices],       # uniformly sampled middle
+                pose_tensor[-1:]       # last frame
+            ], dim=0)
+        elif pose_tensor.shape[0] < self.target_seq_len:
             # Pad with zeros to reach target length
             pad_len = self.target_seq_len - pose_tensor.shape[0]
             pad_tensor = torch.zeros(pad_len, self.input_dim)
             pose_tensor = torch.cat([pose_tensor, pad_tensor], dim=0)
-
-        # Truncate if exceeds max length
-        if pose_tensor.shape[0] > self.max_seq_len:
-            pose_tensor = pose_tensor[:self.max_seq_len]
 
         length = pose_tensor.shape[0]
 

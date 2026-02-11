@@ -3,15 +3,6 @@
 
 class BaseConfig:
     def __init__(self):
-        # ==================== Data Dimensions ====================
-        # Upper Body(14) + Face(16) + HandL(21) + HandR(21) = 72 joints
-        # 72 * 3 (x,y,z) = 216
-        self.INPUT_DIM = 216
-        self.MAX_SEQ_LEN = 50
-        
-        # Sequence interpolation (original data has only 2-4 frames per sample)
-        self.MIN_SEQ_LEN = 8  # Minimum sequence length after interpolation
-        self.INTERPOLATE_SHORT_SEQ = False  # Whether to interpolate short sequences
         
         # ==================== CLIP (Condition Encoder) ====================
         self.CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
@@ -82,7 +73,7 @@ class ASLLVD_Skeleton3D_Config(BaseConfig):
         self.MAX_SEQ_LEN = 50
         
         # Sequence interpolation (original data has only 2-4 frames per sample)
-        self.TARGET_SEQ_LEN = 8  # Target sequence length after interpolation or padding
+        self.TARGET_SEQ_LEN = 8  # Target sampling sequence length
         self.INTERPOLATE_SHORT_SEQ = True  # Whether to interpolate short sequences
                 
         # ==================== Training ====================
@@ -107,10 +98,10 @@ class SignBank_SMPLX_Config(BaseConfig):
         # ==================== Data Dimensions ====================
 
         self.INPUT_DIM = 159
-        self.MAX_SEQ_LEN = 85
+        self.MAX_SEQ_LEN = 100
         
         # Sequence interpolation (original data has only 2-4 frames per sample)
-        self.TARGET_SEQ_LEN = 85  # Target sequence length after interpolation or padding
+        self.TARGET_SEQ_LEN = 48  # Target sampling sequence length
         self.INTERPOLATE_SHORT_SEQ = False  # Whether to interpolate short sequences
                 
         # ==================== Model Architecture ====================

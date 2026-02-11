@@ -23,77 +23,14 @@ from accelerate import Accelerator
 from accelerate.utils import ProjectConfiguration
 from accelerate.logging import get_logger
 
-from ASLLVD_dataset import ASLLVDSkeletonDataset, collate_fn, create_padding_mask
+from dataloader.ASLLVDDataset import ASLLVDSkeletonDataset
+from dataloader.SignBankSMPLXDataset import SignBankSMPLXDataset
 from aslAvatarModel import ASLAvatarModel
-from utils.utils import plot_training_curves, backup_code
+from utils.utils import plot_training_curves, backup_code, collate_fn, create_padding_mask
 
 
-    
+from conflg import SignBank_SMPLX_Config, ASLLVD_Skeleton3D_Config
 
-
-class Config:
-    """Training configuration"""
-    
-    def __init__(self):
-        # ==================== Dataset ====================
-        self.DATASET_NAME = "ASLLVD_Skeleton3D"
-        self.SKELETON_DIR ='/scratch/rhong5/dataset/ASLLVD/asl-skeleton3d/normalized/3d'
-        self.PHONO_DIR = '/scratch/rhong5/dataset/ASLLVD/asl-phono/phonology/3d'
-        
-        # Split files (auto-generated if not exist)
-        self.TRAIN_SPLIT_FILE = "/scratch/rhong5/dataset/ASLLVD/train_split.txt"
-        self.TEST_SPLIT_FILE = "/scratch/rhong5/dataset/ASLLVD/test_split.txt"
-        
-        # ==================== Data Dimensions ====================
-        # Upper Body(14) + Face(16) + HandL(21) + HandR(21) = 72 joints
-        # 72 * 3 (x,y,z) = 216
-        self.INPUT_DIM = 216
-        self.MAX_SEQ_LEN = 50
-        
-        # Sequence interpolation (original data has only 2-4 frames per sample)
-        self.MIN_SEQ_LEN = 8  # Minimum sequence length after interpolation
-        self.INTERPOLATE_SHORT_SEQ = True  # Whether to interpolate short sequences
-        
-        # ==================== CLIP (Condition Encoder) ====================
-        self.CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
-        self.CLIP_DIM = 512
-        
-        # ==================== Model Architecture ====================
-        self.LATENT_DIM = 256
-        self.MODEL_DIM = 512
-        self.N_HEADS = 8
-        self.N_LAYERS = 4
-        self.DROPOUT = 0.1
-        
-        # ==================== Training ====================
-        self.TRAIN_BSZ = 200
-        self.EVAL_BSZ = 200
-        self.GRAD_ACCUM = 1
-        self.MAX_EPOCHS = 5000
-        self.LEARNING_RATE = 1e-4
-        self.WEIGHT_DECAY = 0.01
-        self.LR_WARMUP_STEPS = 500
-        
-        # Loss weights
-        self.KL_WEIGHT = 1e-4  # Start small to avoid posterior collapse
-        
-        # Curriculum Learning
-        self.USE_CURRICULUM = True
-        self.MASK_RATIO_MAX = 0.6
-        
-        # ==================== Hardware ====================
-        self.MIXED_PRECISION = "fp16"
-        self.NUM_WORKERS = 4
-        
-        # ==================== Logging & Checkpoints ====================
-        self.PROJECT_NAME = "ASLAvatar_V1"
-        self.LOG_INTERVAL = 50
-        self.EVAL_INTERVAL = 5  # Evaluate every N epochs
-
-        
-        # Paths (adjust to your environment)
-        self.LOG_DIR = "/home/rhong5/research_pro/hand_modeling_pro/aslAvatar/zlog"
-        self.CKPT_DIR = "/scratch/rhong5/weights/temp_training_weights/"
 
 
 class Trainer:
@@ -101,7 +38,16 @@ class Trainer:
     
     def __init__(self, args):
         self.args = args
+        self.dataset_name = args.dataset
+        if self.dataset_name == "ASLLVD_Skeleton3D":
+            Config = ASLLVD_Skeleton3D_Config
+        elif self.dataset_name == "SignBank_SMPLX":
+            Config = SignBank_SMPLX_Config
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset_name}")
         self.cfg = Config()
+        self.cfg.DATASET_NAME = self.dataset_name
+        
         self.debug = args.debug
         
         # Override config from args
@@ -188,7 +134,14 @@ class Trainer:
         # Resume from checkpoint if specified
         if args.resume:
             self.load_checkpoint(args.resume, finetune=args.finetune)
+            self.cfg.RESUME = args.resume
+            self.cfg.FINETUNE = args.finetune
 
+                ## print config to log
+        self.logger.info("Config:")
+        for k, v in vars(self.cfg).items():
+            self.logger.info(f"  {k}: {v}")
+        self.logger.info("-------------------------------\n")
 
     def _setup_logging(self):
         """Configure logging"""
@@ -222,9 +175,15 @@ class Trainer:
         
         # Datasets
         self.logger.info("Loading datasets...")
-        train_dataset = ASLLVDSkeletonDataset(mode='train', cfg=self.cfg)
-        test_dataset = ASLLVDSkeletonDataset(mode='test', cfg=self.cfg)
-        
+        if self.cfg.DATASET_NAME == "ASLLVD_Skeleton3D":
+            train_dataset = ASLLVDSkeletonDataset(mode='train', cfg=self.cfg)
+            test_dataset = ASLLVDSkeletonDataset(mode='test', cfg=self.cfg)
+        elif self.cfg.DATASET_NAME == "SignBank_SMPLX":
+            train_dataset = SignBankSMPLXDataset(mode='train', cfg=self.cfg)
+            test_dataset = None  # TODO: implement test dataset for SignBank_SMPLX
+        else:
+            raise ValueError(f"Unknown dataset: {self.cfg.DATASET_NAME}")
+            
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=self.cfg.TRAIN_BSZ,
@@ -234,18 +193,23 @@ class Trainer:
             pin_memory=True,
             drop_last=True
         )
+        self.logger.info(f"Train samples: {len(train_dataset)}, Train batches: {len(self.train_loader)}")
         
-        self.test_loader = DataLoader(
-            test_dataset,
-            batch_size=self.cfg.EVAL_BSZ,
-            shuffle=False,
-            collate_fn=collate_fn,
-            num_workers=self.cfg.NUM_WORKERS,
-            pin_memory=True
-        )
+
+        if test_dataset is not None:
+            self.test_loader = DataLoader(
+                test_dataset,
+                batch_size=self.cfg.EVAL_BSZ,
+                shuffle=False,
+                collate_fn=collate_fn,
+                num_workers=self.cfg.NUM_WORKERS,
+                pin_memory=True
+            )
+            self.logger.info(f"Test samples: {len(test_dataset)}, Test batches: {len(self.test_loader)}")
+        else:
+            self.test_loader = None
         
-        self.logger.info(f"Train samples: {len(train_dataset)}, Test samples: {len(test_dataset)}")
-        self.logger.info(f"Train batches: {len(self.train_loader)}, Test batches: {len(self.test_loader)}")
+                
         
         # Model
         self.logger.info("Building model...")
@@ -278,15 +242,16 @@ class Trainer:
             self.model,
             self.optimizer,
             self.train_loader,
-            self.test_loader,
             self.lr_scheduler
         ) = self.accelerator.prepare(
             self.model,
             self.optimizer,
             self.train_loader,
-            self.test_loader,
             self.lr_scheduler
         )
+        
+        if self.test_loader is not None:
+            self.test_loader = self.accelerator.prepare(self.test_loader)
 
     
 
@@ -600,13 +565,17 @@ class Trainer:
                 )
             
 
-            # Evaluate
-            eval_metrics = self.evaluate(epoch)
-            
-            eval_hist['total'].append(eval_metrics['loss'])
-            eval_hist['rec'].append(eval_metrics['mse'])
-            eval_hist['kl'].append(eval_metrics['kl'])
-            
+            if not self.test_loader is None:
+                # Evaluate
+                eval_metrics = self.evaluate(epoch)
+                
+                eval_hist['total'].append(eval_metrics['loss'])
+                eval_hist['rec'].append(eval_metrics['mse'])
+                eval_hist['kl'].append(eval_metrics['kl'])
+            else:
+                eval_metrics = train_metrics
+                eval_hist = None
+                
             # Check if best
             is_best = eval_metrics['loss'] < self.best_loss
             if is_best:
@@ -689,6 +658,7 @@ def parse_args():
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint for resuming training")
     parser.add_argument("--finetune", action="store_true", help="Finetune mode: load weights but reset training state")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--dataset", type=str, default="SignBank_SMPLX", choices=["ASLLVD_Skeleton3D", "SignBank_SMPLX"], help="Dataset to use")
     return parser.parse_args()
 
 

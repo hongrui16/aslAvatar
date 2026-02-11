@@ -4,6 +4,9 @@ from pathlib import Path
 import os
 import numpy as np
 # Plot training curves
+from torch.nn.utils.rnn import pad_sequence
+import torch
+
 
 def plot_training_curves(fig_path, start_epoch, train_hist, eval_hist = None):    
     epochs = list(range(start_epoch, start_epoch + len(train_hist['total'])))
@@ -122,3 +125,48 @@ def backup_code(
                 dst_file.write(src_file.read())
 
     logger.info(f'Backed up code to: {dst_root}')
+
+
+
+
+def collate_fn(batch):
+    """
+    Custom collate function for variable-length sequences.
+    
+    Args:
+        batch: List of (pose_tensor, label, length) tuples
+        
+    Returns:
+        poses_padded: (B, max_T, D) - padded pose sequences
+        labels: List[str] - gloss labels
+        lengths: (B,) - actual lengths
+    """
+    poses, labels, lengths = zip(*batch)
+    
+    # Pad sequences to max length in batch
+    poses_padded = pad_sequence(poses, batch_first=True, padding_value=0.0)
+    
+    # Convert lengths to tensor
+    lengths_tensor = torch.tensor(lengths, dtype=torch.long)
+    
+    return poses_padded, list(labels), lengths_tensor
+
+
+def create_padding_mask(lengths, max_len, device):
+    """
+    Create padding mask from lengths.
+    
+    Args:
+        lengths: (B,) - actual sequence lengths
+        max_len: int - padded sequence length
+        device: torch device
+        
+    Returns:
+        mask: (B, max_len) - True where padded
+    """
+    B = lengths.shape[0]
+    indices = torch.arange(max_len, device=device).expand(B, -1)
+    mask = indices >= lengths.unsqueeze(1)
+    return mask
+
+

@@ -27,7 +27,7 @@ from tqdm import tqdm
 
 # Import from your project
 from aslAvatarModel import ASLAvatarModel
-from ASLLVD_dataset import ASLLVDSkeletonDataset, collate_fn, create_padding_mask
+from dataloader.ASLLVDDataset import ASLLVDSkeletonDataset, collate_fn, create_padding_mask
 
 
 class Config:
