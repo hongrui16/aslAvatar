@@ -7,7 +7,7 @@
 #SBATCH --error=/home/rhong5/research_pro/hand_modeling_pro/aslAvatar/zlog/zslurm/%x-%N-%j.err    # Error file
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1                # One task per GPU
-#SBATCH --gres=gpu:A100.40gb:1             # Request 3 A100 GPUs
+#SBATCH --gres=gpu:3g.40gb:1             # Request 3 A100 GPUs
 #SBATCH --mem=40gb                         # Memory per node
 #SBATCH --export=ALL
 #SBATCH --time=4-24:00:00                  # Set to 4 days and 24 hours

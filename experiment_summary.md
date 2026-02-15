@@ -110,53 +110,40 @@ Total gloss folders: 3,186
 
 **Key Finding**: Distribution peaks at 23 frames (6.69%), with ~75% of glosses containing 20–32 keyframes. Median is approximately 27 frames, indicating substantially denser temporal sampling compared to the skeleton dataset.
 
-### Sampling Frame Selection
+---
+## WLASL Dataset 
 
-| Target Frames | Coverage | Notes |
-|---------------|----------|-------|
-| 32            | ~75%     | Power of 2, video diffusion standard (SVD, AnimateDiff), compute-friendly. ~25% glosses truncated. |
-| 36            | ~85%     | Balanced trade-off between coverage and efficiency. |
-| 48            | ~95%     | Only long-tail glosses need truncation or padding. |
-| 64            | ~99%     | Short glosses require heavy padding, wastes compute. |
+**Source:** WLASL v0.3 JSON (2,000 glosses, ~21K annotated instances)  
+**Videos downloaded via:** `yt-dlp` from YouTube (many links expired)
 
-For variable-length inputs, **uniform temporal sampling** to the target frame count (e.g., uniformly sample 32 frames from a 50-frame clip) preserves full motion trajectory better than hard truncation.
+| Metric | Count |
+|---|---|
+| Total glosses in JSON | 2,000 |
+| Videos found | 11,980 |
+| Videos missing (expired links) | 9,103 |
+| Download rate | ~56.8% |
 
-## Next Steps
+### Per-Gloss Video Distribution
 
-### Proposed Solution: ASL Signbank Video Processing
+| Min Videos per Gloss | Qualifying Glosses | Total Videos |
+|---:|---:|---:|
+| ≥ 1 | 2,000 | 11,980 |
+| ≥ 3 | 1,986 | 11,952 |
+| ≥ 5 | 1,575 | 10,384 |
+| ≥ 8 | 355 | 3,268 |
+| ≥ 10 | 104 | 1,160 |
+| ≥ 12 | 30 | 394 |
+| ≥ 15 | 5 | 78 |
+| ≥ 18 | 0 | 0 |
+| ≥ 20 | 0 | 0 |
 
-**Why ASL Signbank**:
-- Complete videos (15-30 fps, 2-5 seconds per sign)
-- Standardized recording environment (frontal view, clean background)
-- Corresponding phonological annotations available
-- ~3,000+ signs
+---
 
-**Proposed Pipeline**:
-```
-ASL Signbank Videos
-        ↓
-   SMPL-X Extraction (SMPLest-X)
-        ↓
-   Quality Filtering (confidence, occlusion)
-        ↓
-   Phonology Alignment (ASL-LEX 2.0)
-        ↓
-   Training Data
-```
-
-### SMPL-X Extraction
+## SMPL-X Extraction
 
 - **Tool**: [SMPLest-X](https://github.com/MotrixLab/SMPLest-X) — lightweight, efficient SMPL-X parameter extraction
 - **Output**: Full SMPL-X parameters (body pose, hand pose, facial expression) per frame
 
-### Expected Outcome
-
-- ~10,000+ sign videos with dense SMPL-X sequences
-- 30-150 frames per sign (vs. current 2-3 frames)
-- Real motion trajectories instead of interpolated lines
-- Combined with ASL-LEX phonological features for conditioning
-
----
 ---
 
 ## References

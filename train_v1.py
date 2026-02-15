@@ -360,29 +360,13 @@ class Trainer:
         # Free memory
         del ckpt
         torch.cuda.empty_cache()
-        
+            
     def get_mask_ratio(self, epoch):
-        """
-        Curriculum learning: gradually increase mask ratio.
-        
-        Schedule from SignAvatar paper (Equation 3):
-            g(ep) = min(0.1 * floor(ep / 500), 0.6)
-        
-        This creates a step-wise increase:
-            epoch 0-499:    0.0
-            epoch 500-999:  0.1
-            epoch 1000-1499: 0.2
-            epoch 1500-1999: 0.3
-            epoch 2000-2499: 0.4
-            epoch 2500-2999: 0.5
-            epoch 3000+:    0.6
-        """
-        if not self.cfg.USE_CURRICULUM:
-            return 0.0
-        
-        # Paper formula: g(ep) = min(0.1 * floor(ep/500), 0.6)
-        ratio = 0.1 * (epoch // 500)
-        return min(ratio, self.cfg.MASK_RATIO_MAX)
+        mask_increment = self.cfg.MASK_INCREMENT
+        mask_step_epochs = self.cfg.MASK_STEP_EPOCHS
+        max_mask_ratio = self.cfg.MAX_MASK_RATIO
+        return min(mask_increment * (epoch // mask_step_epochs), max_mask_ratio)
+
 
     def apply_masking(self, motion, ratio, padding_mask=None):
         """

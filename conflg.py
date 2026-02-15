@@ -19,17 +19,19 @@ class BaseConfig:
         self.TRAIN_BSZ = 200
         self.EVAL_BSZ = 200
         self.GRAD_ACCUM = 1
-        self.MAX_EPOCHS = 5000
+        self.MAX_EPOCHS = 500
         self.LEARNING_RATE = 1e-4
         self.WEIGHT_DECAY = 0.01
-        self.LR_WARMUP_STEPS = 500
+
         
         # Loss weights
         self.KL_WEIGHT = 1e-4  # Start small to avoid posterior collapse
         
         # Curriculum Learning
         self.USE_CURRICULUM = True
-        self.MASK_RATIO_MAX = 0.6
+        self.MAX_MASK_RATIO = 0.6
+        self.MASK_STEP_EPOCHS = 50
+        self.MASK_INCREMENT = 0.1
         
         # ==================== Hardware ====================
         self.MIXED_PRECISION = "fp16"
