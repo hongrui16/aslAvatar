@@ -1,0 +1,5 @@
+candy /scratch/rhong5/dataset/wlasl/videos/08924.mp4
+like /scratch/rhong5/dataset/wlasl/videos/33274.mp4
+sandwich /scratch/rhong5/dataset/wlasl/videos/49252.mp4
+tell /scratch/rhong5/dataset/wlasl/videos/57282.mp4
+thursday /scratch/rhong5/dataset/wlasl/videos/58366.mp4

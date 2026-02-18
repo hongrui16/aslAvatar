@@ -25,7 +25,7 @@ class BaseConfig:
 
         
         # Loss weights
-        self.KL_WEIGHT = 1e-4  # Start small to avoid posterior collapse
+        self.KL_WEIGHT = 1e-3  # Start small to avoid posterior collapse
         
         # Curriculum Learning
         self.USE_CURRICULUM = True
@@ -50,6 +50,28 @@ class BaseConfig:
         
         self.RESUME = None  # Path to checkpoint for resuming training
         self.FINETUNE = False  # Whether to finetune (load weights but reset training state)
+
+        self.HUMAN_MODELS_PATH = "./human_models/human_model_files"
+        
+        self.MODEL_VERSION = 'v1'        
+        self.DATASET_VERSION = 'v1'
+        
+        self.USE_ROT6D = False
+        self.USE_UPPER_BODY = False
+
+        self.USE_MINI_DATASET = False
+        
+        self.USE_LABEL_INDEX_COND = False
+        
+        self.GLOSS_NAME_LIST = []
+
+        self.NUM_CLASSES = None
+        self.EMBED_DIM = 256
+        
+        self.VEL_WEIGHT  = 1.0
+        self.ROOT_NORMALIZE = True
+        self.N_FEATS = 6 if self.USE_ROT6D else 3
+        self.N_JOINTS = 45 if self.USE_UPPER_BODY else 53
 
 
 class ASLLVD_Skeleton3D_Config(BaseConfig):
@@ -116,3 +138,49 @@ class SignBank_SMPLX_Config(BaseConfig):
         # ==================== Training ====================
         self.TRAIN_BSZ = 400
         self.EVAL_BSZ = 200
+
+
+
+
+class WLASL_SMPLX_Config(BaseConfig):
+    """Training configuration"""
+    
+    def __init__(self):
+        super().__init__()
+        # ==================== Dataset ====================
+        
+        # ==================== ASLLVD_Skeleton3D ====================
+        self.DATASET_NAME = "WLASL_SMPLX"
+        # self.ROOT_DIR ='/scratch/rhong5/dataset/wlasl'
+        self.ROOT_DIR ='/home/rhong5/research_pro/hand_modeling_pro/aslAvatar/data/synthetic_smplx_data'
+        
+
+        # ==================== Data Dimensions ====================
+
+        # self.INPUT_DIM = 159 # for dataset v1
+        # self.INPUT_DIM = 264 # for dataset v2
+        
+        self.MAX_SEQ_LEN = 100
+        
+        # Sequence interpolation (original data has only 2-4 frames per sample)
+        self.TARGET_SEQ_LEN = 40  # Target sampling sequence length
+        self.INTERPOLATE_SHORT_SEQ = False  # Whether to interpolate short sequences
+                
+        # ==================== Model Architecture ====================
+        self.LATENT_DIM = 256
+        self.MODEL_DIM = 512
+        self.N_HEADS = 8
+        self.N_LAYERS = 4
+        self.DROPOUT = 0.1
+        
+        # ==================== Training ====================
+        self.TRAIN_BSZ = 100
+        self.EVAL_BSZ = 100
+        
+        self.MODEL_VERSION = 'v4'
+        self.DATASET_VERSION = 'v2'
+
+        self.USE_ROT6D = True
+        self.USE_UPPER_BODY = True
+        
+

@@ -8,20 +8,29 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 
 
-class SignBankSMPLXDataset(Dataset):
+class WLASLSMPLXDataset(Dataset):
     """
-    Dataset for ASL SignBank SMPL-X parameters extracted from keyframe videos.
-    
-    Expected file structure:
+    Dataset for WLASL SMPL-X parameters.
+
+    File structure:
         smplx_params/
-            DEVIL/
-                DEVIL_000000_p0.npz
-                DEVIL_000012_p0.npz
-                ...
-            HELLO/
-                HELLO_000000_p0.npz
-                ...
-    
+            book/
+                06297/
+                    book_06297_000000_p0.npz
+                    book_06297_000012_p0.npz
+                    ...
+                06301/
+                    ...
+            drink/
+                07102/
+                    ...
+
+    One sample = one video (gloss/video_id/*.npz sorted by frame index).
+    Returns: (pose_tensor, label, length)
+        - pose_tensor: (target_seq_len, input_dim)
+        - label: int (gloss index)
+        - length: int (actual frames before padding)
+
     Each .npz contains SMPL-X parameters for a single frame:
         - smplx_root_pose:   (3,)     Global orientation (axis-angle)
         - smplx_body_pose:   (21, 3)  Body joint rotations (axis-angle)
@@ -60,7 +69,7 @@ class SignBankSMPLXDataset(Dataset):
     LHAND_JOINTS = 15
     RHAND_JOINTS = 15
 
-    def __init__(self, mode='train', cfg=None):
+    def __init__(self, mode='train', cfg=None, logger = None):
         """
         Args:
             mode: 'train' or 'test'
@@ -77,7 +86,7 @@ class SignBankSMPLXDataset(Dataset):
         assert mode in ['train', 'test'], f"mode must be 'train' or 'test', got {mode}"
         # self.cfg = cfg
         self.mode = mode
-        self.data_list = []  # list of gloss folder names
+        self.logger = logger
 
         # Feature selection
         self.include_expr = getattr(cfg, 'INCLUDE_EXPRESSION', False)
@@ -94,15 +103,19 @@ class SignBankSMPLXDataset(Dataset):
             self.input_dim += self.CAM_TRANS_DIM
         
         self.n_joints = 53
+        self.n_feats = 3
+        self.target_seq_len = getattr(cfg, 'TARGET_SEQ_LEN', 48) if cfg is not None else 48 
+        self.min_frames = 5
+        self.root_dir = getattr(cfg, 'ROOT_DIR', './smplx_params') if cfg is not None else './smplx_params'
+
+        self.smplx_params_dir = os.path.join(self.root_dir, mode, 'smplx_params')
+        self.data_list = []      # [(gloss, video_dir_path), ...]
+        self.gloss_to_idx = {}   # {gloss_name: int}
+
         self.gloss_name_list = []
         
-        self.max_seq_len = getattr(cfg, 'MAX_SEQ_LEN', 85) if cfg is not None else 85
-        self.target_seq_len = getattr(cfg, 'TARGET_SEQ_LEN', 85) if cfg is not None else 85 
-        
-        self.smplx_params_dir = getattr(cfg, 'ROOT_DIR', './smplx_params') if cfg is not None else './smplx_params'
-
         self._check_dirs()
-        self._load_all_glosses()
+        self._load_all_samples()
 
     # ==================== Initialization ====================
 
@@ -110,58 +123,52 @@ class SignBankSMPLXDataset(Dataset):
         """Verify data directory exists."""
         if not os.path.exists(self.smplx_params_dir):
             raise FileNotFoundError(f"SMPL-X directory not found: {self.smplx_params_dir}")
-
-    def _load_all_glosses(self):
-        """Load all gloss folders that contain at least one .npz file."""
-        all_dirs = sorted([
-            d for d in os.listdir(self.smplx_params_dir)
-            if os.path.isdir(os.path.join(self.smplx_params_dir, d))
-        ])
-
-        for gloss in all_dirs:
-            gloss_dir = os.path.join(self.smplx_params_dir, gloss)
-            self.gloss_name_list.append(gloss.lower())
-            if any(f.endswith('.npz') for f in os.listdir(gloss_dir)):
-                self.data_list.append(gloss)
-
-        print(f"Loaded {len(self.data_list)} glosses from {self.smplx_params_dir}")
-
-
-    # ==================== Data Loading ====================
-
-    def _get_npz_files(self, gloss_name):
-        """
-        Get all .npz files for a gloss, sorted by frame index.
         
-        Filename pattern: GLOSS_FRAMENUM_pPERSON.npz
-        e.g. DEVIL_000012_p0.npz → frame 12, person 0
-        
-        Returns:
-            List of (frame_idx, filepath) tuples sorted by frame_idx
-        """
-        gloss_dir = os.path.join(self.smplx_params_dir, gloss_name)
-        npz_files = [f for f in os.listdir(gloss_dir) if f.endswith('.npz')]
+    def _load_all_samples(self):
+        if not os.path.exists(self.smplx_params_dir):
+            raise FileNotFoundError(f"Not found: {self.smplx_params_dir}")
 
-        frames = []
-        for fname in npz_files:
-            try:
-                # Parse frame index from filename: GLOSS_FRAMENUM_pX.npz
-                parts = fname.replace('.npz', '').split('_')
-                # Frame number is the part that's all digits (6-digit zero-padded)
-                frame_idx = None
-                for part in parts:
-                    if part.isdigit() and len(part) >= 4:
-                        frame_idx = int(part)
-                        break
-                if frame_idx is not None:
-                    frames.append((frame_idx, os.path.join(gloss_dir, fname)))
-            except Exception as e:
-                print(f"Warning: Could not parse {fname}: {e}")
+        skipped = 0
+        for gloss in sorted(os.listdir(self.smplx_params_dir)):
+            gloss_path = os.path.join(self.smplx_params_dir, gloss)
+            if not os.path.isdir(gloss_path):
                 continue
 
-        # Sort by frame index
-        frames.sort(key=lambda x: x[0])
-        return frames
+            for video_id in sorted(os.listdir(gloss_path)):
+                video_path = os.path.join(gloss_path, video_id)
+                if not os.path.isdir(video_path):
+                    continue
+
+                n = sum(1 for f in os.listdir(video_path) if f.endswith('.npz'))
+                if n < self.min_frames:
+                    skipped += 1
+                    continue
+
+                if gloss not in self.gloss_to_idx:
+                    self.gloss_to_idx[gloss] = len(self.gloss_to_idx)
+                self.data_list.append((gloss, video_path))
+        self.gloss_name_list = [g.lower() for g, _ in sorted(self.gloss_to_idx.items(), key=lambda x: x[1])]
+        
+        
+        self.logger.info(f"[{self.mode}] {len(self.data_list)} videos, "
+              f"{len(self.gloss_to_idx)} glosses "
+              f"(skipped {skipped} < {self.min_frames} frames)")
+        self.logger.info(f"[{self.mode}] Glosses: {sorted(self.gloss_to_idx.keys())}")
+        
+        
+    # ==================== Data Loading ====================
+    def _get_sorted_npz(self, video_dir):
+            """Return sorted (frame_idx, filepath) list."""
+            frames = []
+            for fname in os.listdir(video_dir):
+                if not fname.endswith('.npz'):
+                    continue
+                # 格式: gloss_videoID_frameID_p0.npz
+                parts = fname.replace('.npz', '').split('_')
+                frame_idx = int(parts[2])
+                frames.append((frame_idx, os.path.join(video_dir, fname)))
+            frames.sort(key=lambda x: x[0])
+            return frames
 
     def _load_frame(self, npz_path):
         """
@@ -251,67 +258,48 @@ class SignBankSMPLXDataset(Dataset):
     def __len__(self):
         return len(self.data_list)
 
-    def __getitem__(self, idx, debug=False):
-        """
-        Returns:
-            pose_tensor: (T, input_dim) — normalized SMPL-X pose sequence
-            label: str — gloss name (lowercase)
-            length: int — actual sequence length (before padding)
-        """
-        gloss_name = self.data_list[idx]
-        label = gloss_name.lower()
+    def __getitem__(self, idx):
+        gloss, video_dir = self.data_list[idx]
 
-        # Get sorted frame files
-        frame_list = self._get_npz_files(gloss_name)
 
-        if len(frame_list) == 0:
-            print(f"Warning: No .npz frames found for {gloss_name}")
-            return torch.zeros(1, self.input_dim), label, 1
+        frames = self._get_sorted_npz(video_dir)
+        if not frames:
+            return torch.zeros(self.target_seq_len, self.input_dim), gloss, 1
 
-        num_frames = len(frame_list)
-
-        # Load all frames
-        pose_list = []
-        for frame_idx, npz_path in frame_list:
+        poses = []
+        for _, path in frames:
             try:
-                frame_features = self._load_frame(npz_path)
-                pose_list.append(frame_features)
+                poses.append(self._load_frame(path))
             except Exception as e:
-                print(f"Warning: Error loading {npz_path}: {e}")
-                continue
+                print(f"Warning: {path}: {e}")
 
-        if len(pose_list) == 0:
-            print(f"Warning: All frames failed to load for {gloss_name}")
-            return torch.zeros(1, self.input_dim), label, 1
+        if not poses:
+            return torch.zeros(self.target_seq_len, self.input_dim), gloss, 1
 
-        pose_tensor = torch.stack(pose_list)  # (T, input_dim)
+        seq = self._normalize_pose(torch.stack(poses))
+        actual_len = seq.shape[0]
 
-        # Normalize
-        pose_tensor = self._normalize_pose(pose_tensor)
+        if actual_len > self.target_seq_len:
+            idx_sub = torch.linspace(0, actual_len - 1, self.target_seq_len).long()
+            seq = seq[idx_sub]
+            actual_len = self.target_seq_len
+        elif actual_len < self.target_seq_len:
+            pad = torch.zeros(self.target_seq_len - actual_len, self.input_dim)
+            seq = torch.cat([seq, pad], dim=0)
 
-        if pose_tensor.shape[0] > self.target_seq_len:
-            # Keep first and last frame, uniformly sample middle frames
-            middle = pose_tensor[1:-1]  # (T-2, input_dim)
-            num_sample = self.target_seq_len - 2
-            indices = torch.linspace(0, middle.shape[0] - 1, num_sample).long()
-            pose_tensor = torch.cat([
-                pose_tensor[:1],       # first frame
-                middle[indices],       # uniformly sampled middle
-                pose_tensor[-1:]       # last frame
-            ], dim=0)
-        elif pose_tensor.shape[0] < self.target_seq_len:
-            # Pad with zeros to reach target length
-            pad_len = self.target_seq_len - pose_tensor.shape[0]
-            pad_tensor = torch.zeros(pad_len, self.input_dim)
-            pose_tensor = torch.cat([pose_tensor, pad_tensor], dim=0)
+        return seq, gloss, actual_len
 
-        length = pose_tensor.shape[0]
+    def get_num_classes(self):
+        return len(self.gloss_to_idx)
 
-        if debug:
-            return pose_tensor, label, num_frames
+    def get_gloss_name(self, idx):
+        for g, i in self.gloss_to_idx.items():
+            if i == idx:
+                return g
+        return None
 
-        return pose_tensor, label, length
-
+    def get_gloss_samples(self, gloss_name):
+        return [i for i, (g, _) in enumerate(self.data_list) if g == gloss_name]
 
     def get_feature_indices(self):
         """

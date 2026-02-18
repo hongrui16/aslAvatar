@@ -11,78 +11,47 @@ import torch
 def plot_training_curves(fig_path, start_epoch, train_hist, eval_hist = None):    
     epochs = list(range(start_epoch, start_epoch + len(train_hist['total'])))
     
-    num_fig = 2
-    if eval_hist is not None and len(eval_hist['total']) > 0:
-        num_row = 2
+    ncols = 0
+    for k in train_hist.keys():
+        v = train_hist[k]
+        if len(v) > 0:
+            ncols += 1
+
+    if eval_hist is not None:
+        nrows = 2
     else:
-        num_row = 1
-    if 'kl' in train_hist:
-        num_fig += 1
-    if 'mask_ratio' in train_hist:
-        num_fig += 1
+        nrows = 1
 
     
-    fig, axes = plt.subplots(num_row, num_fig, figsize=(15, 4))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(15, 4))
     # make axes always 1D
     axes = np.array(axes).reshape(-1)
 
+    col_ind = 0
+    for k in train_hist.keys():
+        # print("train_hist['total']:", train_hist['total'])
+        # Total loss
+        axes[col_ind].plot(epochs, train_hist[k], 'b-o', linewidth=2, markersize=4)
+        axes[col_ind].set_xlabel('Epoch')
+        axes[col_ind].set_ylabel('Loss')
+        axes[col_ind].set_title(f'Train {k} Loss')
+        axes[col_ind].grid(True, alpha=0.3)
+        col_ind += 1
+    
 
-    # print("train_hist['total']:", train_hist['total'])
-    # Total loss
-    axes[0].plot(epochs, train_hist['total'], 'b-o', linewidth=2, markersize=4)
-    axes[0].set_xlabel('Epoch')
-    axes[0].set_ylabel('Loss')
-    axes[0].set_title('Train Total Loss')
-    axes[0].grid(True, alpha=0.3)
     
-    # Rec loss
-    axes[1].plot(epochs, train_hist['rec'], 'g-o', linewidth=2, markersize=4)
-    axes[1].set_xlabel('Epoch')
-    axes[1].set_ylabel('Loss')
-    axes[1].set_title('Train Rec Loss')
-    axes[1].grid(True, alpha=0.3)
-    fig_idx = 1
-    
-    if 'kl' in train_hist:
-        # KL loss
-        axes[2].plot(epochs, train_hist['kl'], 'r-o', linewidth=2, markersize=4)
-        axes[2].set_xlabel('Epoch')
-        axes[2].set_ylabel('Loss')
-        axes[2].set_title('Train KL Loss')
-        axes[2].grid(True, alpha=0.3)
-        fig_idx = 2
         
-    if 'mask_ratio' in train_hist:        
-        idx = fig_idx + 1
-        # Mask Ratio
-        axes[idx].plot(epochs, train_hist['mask_ratio'], 'm-o', linewidth=2, markersize=4)
-        axes[idx].set_xlabel('Epoch')
-        axes[idx].set_ylabel('Mask Ratio')
-        axes[idx].set_title('Train Mask Ratio')
-        axes[idx].grid(True, alpha=0.3)
-        fig_idx += 1
-        
-    if eval_hist is not None and len(eval_hist['total']) > 0:
-        axes[fig_idx + 1].plot(epochs, eval_hist['total'], 'b-s', linewidth=2, markersize=4)
-        axes[fig_idx + 1].set_xlabel('Epoch')
-        axes[fig_idx + 1].set_ylabel('Loss')
-        axes[fig_idx + 1].set_title('Eval Total Loss')
-        axes[fig_idx + 1].grid(True, alpha=0.3) 
-        
-        fig_idx += 1
-        axes[fig_idx + 1].plot(epochs, eval_hist['rec'], 'g-s', linewidth=2, markersize=4)
-        axes[fig_idx + 1].set_xlabel('Epoch')
-        axes[fig_idx + 1].set_ylabel('Loss')
-        axes[fig_idx + 1].set_title('Eval Rec Loss')
-        axes[fig_idx + 1].grid(True, alpha=0.3)
-        fig_idx += 1
-        
-        if 'kl' in eval_hist:
-            axes[fig_idx + 1].plot(epochs, eval_hist['kl'], 'r-s', linewidth=2, markersize=4)
-            axes[fig_idx + 1].set_xlabel('Epoch')
-            axes[fig_idx + 1].set_ylabel('Loss')
-            axes[fig_idx + 1].set_title('Eval KL Loss')
-            axes[fig_idx + 1].grid(True, alpha=0.3)
+    if eval_hist is not None:
+        col_ind = ncols
+        for k in eval_hist.keys():
+            # print("train_hist['total']:", train_hist['total'])
+            # Total loss
+            axes[col_ind].plot(epochs, eval_hist[k], 'r-o', linewidth=2, markersize=4)
+            axes[col_ind].set_xlabel('Epoch')
+            axes[col_ind].set_ylabel('Loss')
+            axes[col_ind].set_title(f'Val {k} Loss')
+            axes[col_ind].grid(True, alpha=0.3)
+            col_ind += 1
 
     
     plt.tight_layout()

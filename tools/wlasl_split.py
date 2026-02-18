@@ -9,8 +9,8 @@ wlasl_split.py — 筛选 WLASL glosses, 输出 train.txt / test.txt
       --wlasl_json /path/to/WLASL_v0.3.json \
       --video_dir /path/to/wlasl_videos \
       --output_dir ./wlasl_processed \
-      --min_samples 18 \
-      --test_per_gloss 2
+      --min_samples 10 \
+      --test_per_gloss 1
 """
 
 import os

@@ -35,7 +35,8 @@ accelerate launch --num_processes=1 \
     --machine_rank=0 \
     --main_process_ip=localhost \
     --main_process_port=$PORT \
-    train_v1.py  --dataset WLASL_SMPLX  --use_mini_dataset --use_lebel_index_cond
+    train_v3.py  --dataset WLASL_SMPLX  --use_mini_dataset 
+#--use_lebel_index_cond
 # --use_rot6d
 
 

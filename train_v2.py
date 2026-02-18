@@ -30,6 +30,8 @@ from dataloader.WLASLSMPLXDatasetV2 import WLASLSMPLXDatasetV2
 from aslAvatarModel import ASLAvatarModel
 from aslAvatarModel_v2 import ASLAvatarModelV2
 from aslAvatarModel_v3 import ASLAvatarModelV3
+from aslAvatarModel_v4 import ASLAvatarModelV4
+
 from utils.utils import plot_training_curves, backup_code, collate_fn, create_padding_mask
 
 
@@ -57,6 +59,8 @@ class Trainer:
         self.cfg.USE_ROT6D = args.use_rot6d
         self.cfg.USE_MINI_DATASET = args.use_mini_dataset
         self.cfg.USE_LABEL_INDEX_COND= args.use_lebel_index_cond
+        self.cfg.PROJECT_NAME = "ASLAvatar_V2"
+        self.cfg.ROOT_NORMALIZE = not args.no_root_normalize
         
         self.debug = args.debug
         
@@ -230,6 +234,8 @@ class Trainer:
         self.cfg.INPUT_DIM = train_dataset.input_dim
         self.cfg.GLOSS_NAME_LIST = train_dataset.gloss_name_list
         self.cfg.NUM_CLASSES = len(self.cfg.GLOSS_NAME_LIST)
+        self.cfg.N_FEATS = train_dataset.n_feats
+        self.cfg.N_JOINTS = train_dataset.n_joints
         
         # Model
         self.logger.info("Building model...")
@@ -238,6 +244,8 @@ class Trainer:
                 self.model = ASLAvatarModel(self.cfg)
             elif self.cfg.MODEL_VERSION.lower() == 'v2':
                 self.model = ASLAvatarModelV2(self.cfg)
+            elif self.cfg.MODEL_VERSION.lower() == 'v4':
+                self.model = ASLAvatarModelV4(self.cfg)
             else:
                 raise ValueError('incorrect model version!')
         else:
@@ -426,40 +434,59 @@ class Trainer:
         return masked_motion
 
     def compute_loss(self, recon, target, mu, logvar, padding_mask):
-        """
-        Compute CVAE loss = reconstruction + KL divergence.
+        valid_mask = ~padding_mask  # (B, T)
+        feat = 6 if self.cfg.USE_ROT6D else 3
+        if self.cfg.USE_UPPER_BODY:            
+            # 45 joints: root(1) + upper_body(13) + lhand(15) + rhand(15) + jaw(1)
+            ROOT  = slice(0, feat)
+            BODY  = slice(feat, 14 * feat)
+            LHAND = slice(14 * feat, 29 * feat)
+            RHAND = slice(29 * feat, 44 * feat)
+            JAW   = slice(44 * feat, 45 * feat)
+        else:
+            # 45 joints: root(1) + upper_body(21) + lhand(15) + rhand(15) + jaw(1)
+            ROOT  = slice(0, feat)
+            BODY  = slice(feat, 22 * feat)
+            LHAND = slice(22 * feat, 37 * feat)
+            RHAND = slice(37 * feat, 52 * feat)
+            JAW   = slice(52 * feat, 53 * feat)
+            
+        def masked_mse(pred, gt):
+            mse = F.mse_loss(pred, gt, reduction='none')
+            mask = valid_mask.unsqueeze(-1).expand_as(mse).float()
+            return (mse * mask).sum() / (mask.sum() + 1e-8)
         
-        Args:
-            recon: (B, T, D) - reconstructed motion
-            target: (B, T, D) - ground truth motion
-            mu: (B, latent_dim) - mean
-            logvar: (B, latent_dim) - log variance
-            padding_mask: (B, T) - True where padded
+        # Weighted reconstruction loss
+        mse_loss = (0.1 * masked_mse(recon[..., ROOT],  target[..., ROOT])
+                  + 1.0 * masked_mse(recon[..., BODY],  target[..., BODY])
+                  + 5.0 * masked_mse(recon[..., LHAND], target[..., LHAND])
+                  + 5.0 * masked_mse(recon[..., RHAND], target[..., RHAND])
+                  + 0.1 * masked_mse(recon[..., JAW],   target[..., JAW]))
         
-        Returns:
-            total_loss, mse_loss, kl_loss
-        """
-        # Reconstruction loss (MSE, excluding padding)
-        mse = F.mse_loss(recon, target, reduction='none')  # (B, T, D)
+        # Weighted velocity loss
+        vel_gt = target[:, 1:] - target[:, :-1]
+        vel_pred = recon[:, 1:] - recon[:, :-1]
+        vel_valid = (valid_mask[:, 1:] & valid_mask[:, :-1])
         
-        # Create mask for valid (non-padded) positions
-        valid_mask = ~padding_mask  # (B, T), True where valid
-        valid_mask_expanded = valid_mask.unsqueeze(-1).expand_as(mse)  # (B, T, D)
+        def masked_vel(pred, gt):
+            mse = F.mse_loss(pred, gt, reduction='none')
+            mask = vel_valid.unsqueeze(-1).expand_as(mse).float()
+            return (mse * mask).sum() / (mask.sum() + 1e-8)
         
-        # Masked MSE
-        mse_masked = mse * valid_mask_expanded.float()
-        num_valid = valid_mask_expanded.sum()
-        mse_loss = mse_masked.sum() / (num_valid + 1e-8)
+        vel_loss = (0.1 * masked_vel(vel_pred[..., ROOT],  vel_gt[..., ROOT])
+                  + 1.0 * masked_vel(vel_pred[..., BODY],  vel_gt[..., BODY])
+                  + 5.0 * masked_vel(vel_pred[..., LHAND], vel_gt[..., LHAND])
+                  + 5.0 * masked_vel(vel_pred[..., RHAND], vel_gt[..., RHAND])
+                  + 0.1 * masked_vel(vel_pred[..., JAW],   vel_gt[..., JAW]))
         
-        # KL divergence: KL(N(mu, sigma) || N(0, I))
-        # = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+        # KL divergence
         kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        kl_loss = kl_loss / mu.size(0)  # Normalize by batch size
+        kl_loss = kl_loss / mu.size(0)
         
         # Total loss
-        total_loss = mse_loss + self.cfg.KL_WEIGHT * kl_loss
+        total_loss = mse_loss + self.cfg.KL_WEIGHT * kl_loss + self.cfg.VEL_WEIGHT * vel_loss
         
-        return total_loss, mse_loss, kl_loss
+        return total_loss, mse_loss, kl_loss, vel_loss
 
     def train_epoch(self, epoch):
         """Run one training epoch"""
@@ -469,6 +496,7 @@ class Trainer:
         epoch_loss = 0.0
         epoch_mse = 0.0
         epoch_kl = 0.0
+        epoch_vel = 0.0
         num_batches = 0
         
         num_prints = 50
@@ -501,7 +529,7 @@ class Trainer:
                 recon_motion, mu, logvar = self.model(input_motion, gloss, padding_mask)
                 
                 # Compute loss (compare with original unmasked motion)
-                loss, mse, kl = self.compute_loss(recon_motion, motion, mu, logvar, padding_mask)
+                loss, mse, kl, vel = self.compute_loss(recon_motion, motion, mu, logvar, padding_mask)
                 
                 # Backward
                 self.accelerator.backward(loss)
@@ -519,6 +547,7 @@ class Trainer:
                 epoch_loss += loss.item()
                 epoch_mse += mse.item()
                 epoch_kl += kl.item()
+                epoch_vel += vel.item()
                 num_batches += 1
                 
                     
@@ -535,6 +564,7 @@ class Trainer:
             'loss': epoch_loss / num_batches,
             'mse': epoch_mse / num_batches,
             'kl': epoch_kl / num_batches,
+            'vel': epoch_vel / num_batches,
             'mask_ratio': mask_ratio
         }
 
@@ -555,12 +585,14 @@ class Trainer:
         train_hist = {'total': [],
                 'rec': [],
                 'kl': [],
+                'vel': [],
                 'mask_ratio': []}      
 
         eval_hist = {
             'total': [],
             'rec': [],
-            'kl': []
+            'kl': [],
+            'vel': [],
         }
         
         for epoch in range(self.start_epoch, self.cfg.MAX_EPOCHS):
@@ -570,12 +602,14 @@ class Trainer:
             train_hist['total'].append(train_metrics['loss'])
             train_hist['rec'].append(train_metrics['mse'])
             train_hist['kl'].append(train_metrics['kl'])
+            train_hist['vel'].append(train_metrics['vel'])
+            
             train_hist['mask_ratio'].append(train_metrics['mask_ratio'])
             
             if self.accelerator.is_main_process:
                 self.logger.info(
                     f"Train Epoch {epoch+1}/{self.cfg.MAX_EPOCHS}: loss={train_metrics['loss']:.4f}, "
-                    f"rec={train_metrics['mse']:.4f}, kl={train_metrics['kl']:.4f}, mask_ratio={train_metrics['mask_ratio']:.2f}"
+                    f"rec={train_metrics['mse']:.4f}, kl={train_metrics['kl']:.4f}, vel={train_metrics['vel']:.4f}, mask_ratio={train_metrics['mask_ratio']:.2f}"
                 )
             
 
@@ -586,6 +620,7 @@ class Trainer:
                 eval_hist['total'].append(eval_metrics['loss'])
                 eval_hist['rec'].append(eval_metrics['mse'])
                 eval_hist['kl'].append(eval_metrics['kl'])
+                eval_hist['vel'].append(eval_metrics['vel'])
             else:
                 eval_metrics = train_metrics
                 eval_hist = None
@@ -625,6 +660,7 @@ class Trainer:
         total_loss = 0.0
         total_mse = 0.0
         total_kl = 0.0
+        total_vel = 0.0
         num_batches = 0
         
         for batch in tqdm(self.test_loader, desc="Evaluating", 
@@ -639,29 +675,32 @@ class Trainer:
             
             # No masking during evaluation
             recon_motion, mu, logvar = self.model(motion, gloss, padding_mask)
-            loss, mse, kl = self.compute_loss(recon_motion, motion, mu, logvar, padding_mask)
+            loss, mse, kl, vel = self.compute_loss(recon_motion, motion, mu, logvar, padding_mask)
             
             total_loss += loss.item()
             total_mse += mse.item()
             total_kl += kl.item()
+            total_vel += vel.item()
             num_batches += 1
         
         metrics = {
             'loss': total_loss / num_batches,
             'mse': total_mse / num_batches,
-            'kl': total_kl / num_batches
+            'kl': total_kl / num_batches,
+            'vel': total_vel / num_batches
         }
         
         if self.accelerator.is_main_process:
             self.accelerator.log({
                 "eval/loss": metrics['loss'],
                 "eval/mse": metrics['mse'],
-                "eval/kl": metrics['kl']
+                "eval/kl": metrics['kl'],
+                "eval/vel": metrics['vel']
             }, step=self.global_step)
             
             self.logger.info(
                 f"Eval Epoch {epoch+1}: loss={metrics['loss']:.4f}, "
-                f"mse={metrics['mse']:.4f}, kl={metrics['kl']:.4f}"
+                f"mse={metrics['mse']:.4f}, kl={metrics['kl']:.4f}, vel={metrics['vel']:.4f}"
             )
         
         return metrics
@@ -673,15 +712,15 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=None, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=None, help="Learning rate")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint for resuming training")
-    parser.add_argument("--finetune", action="store_true", help="Finetune mode: load weights but reset training state")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--finetune", action="store_true", default=False, help="Finetune mode: load weights but reset training state")
+    parser.add_argument("--debug", action="store_true", default=False, help="Enable debug mode")
     parser.add_argument("--dataset", type=str, default="SignBank_SMPLX", choices=["ASLLVD_Skeleton3D", "SignBank_SMPLX", "WLASL_SMPLX"], help="Dataset to use")
-    parser.add_argument("--use_upper_body", action="store_true", help="only use upper body")
-    parser.add_argument("--use_rot6d", action="store_true", help="use 6d rotation")
-    parser.add_argument("--use_mini_dataset", action="store_true", help="use mini dataset")
-    parser.add_argument("--use_lebel_index_cond", action="store_true", help = "use label index condition")
+    parser.add_argument("--use_upper_body", action="store_true", default=False, help="only use upper body")
+    parser.add_argument("--use_rot6d", action="store_true", default=False, help="use 6d rotation")
+    parser.add_argument("--use_mini_dataset", action="store_true", default=False, help="use mini dataset")
+    parser.add_argument("--use_lebel_index_cond", action="store_true", default=False, help = "use label index condition")
+    parser.add_argument("--no_root_normalize", action="store_true", default=False, help="Disable root pose normalization (subtract first frame root)")
     
-
     return parser.parse_args()
 
 

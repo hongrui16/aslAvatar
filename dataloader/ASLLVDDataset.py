@@ -68,7 +68,7 @@ class ASLLVDSkeletonDataset(Dataset):
     HIP_RIGHT_IDX = 8   # position of hip_r in BODY_INDICES
     HIP_LEFT_IDX = 9    # position of hip_l in BODY_INDICES
     
-    def __init__(self, mode='train', cfg=None):
+    def __init__(self, mode='train', cfg=None, logger = None):
         assert mode in ['train', 'test'], f"mode must be 'train' or 'test', got {mode}"
         self.cfg = cfg
         self.mode = mode
